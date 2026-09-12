@@ -237,7 +237,7 @@ main() {
            say "    export PATH=\"$target:\$PATH\"" ;;
     esac
     say ""
-    say "  Next: paste the connect command from the Storagetax console."
+    say "  Next: paste the connect command from the Zoorik console."
     say ""
 }
 

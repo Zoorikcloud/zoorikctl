@@ -139,7 +139,7 @@ function Assert-Signature {
     Write-Host "  signature ok (keyless, built by $BuildRepo)"
 }
 
-function Install-Stxctl {
+function Install-Zoorikctl {
     $arch = Get-Architecture
     $version = Get-LatestVersion
     $asset = "zoorikctl_${version}_windows_${arch}.zip"
@@ -196,7 +196,7 @@ function Install-Stxctl {
         Write-Host "  installed $(Join-Path $target $Binary)"
         Add-ToUserPath -Directory $target
         Write-Host ''
-        Write-Host '  Next: paste the connect command from the Storagetax console.'
+        Write-Host '  Next: paste the connect command from the Zoorik console.'
         Write-Host ''
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
@@ -219,4 +219,4 @@ function Add-ToUserPath {
     Write-Host "  added $Directory to your user PATH (this session included)"
 }
 
-Install-Stxctl
+Install-Zoorikctl
