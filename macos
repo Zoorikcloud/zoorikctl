@@ -1,48 +1,24 @@
 #!/bin/sh
-# zoorikctl installer for macOS and Linux.
-#
-# Served at BOTH https://get.zoorik.com/macos and https://get.zoorik.com/linux. One file
-# rather than two, because the only thing the two paths would differ by is the OS string this
-# script already has to detect for itself -- and two copies of an installer is two places a
-# checksum check can be forgotten, which is the one mistake here that cannot be fixed later
-# without a security advisory.
-#
-#   curl -fsSL https://get.zoorik.com/macos | sh
-#   curl -fsSL https://get.zoorik.com/linux | sh
-#
-# ENVIRONMENT
-#   ZOORIKCTL_VERSION      install this release instead of the latest (e.g. v1.2.3)
-#   ZOORIKCTL_INSTALL_DIR  install here instead of the first writable default
-#   ZOORIKCTL_BASE_URL     download from here instead of GitHub releases (mirrors, air-gapped copies,
-#                       and this repository's own installer tests)
-#
-# POSIX sh on purpose: `curl | sh` and `curl | bash` must both work, and dash is /bin/sh on Debian
-# and Ubuntu. No arrays, no [[, no pipefail -- the last of which is why every download is checked
-# by its exit status rather than by a pipeline's.
 
 set -eu
 
-# 🔴 TWO REPOSITORIES, AND THEY ARE NOT THE SAME ONE.
-#
-# REPO is where the release ASSETS live and is what every download URL is built from. It is public,
-# because a customer's machine is anonymous and GitHub does not serve release assets from a private
-# repository to an unauthenticated caller.
-#
-# BUILD_REPO is where the workflow that SIGNED those assets ran, and it is the identity recorded in
-# the Fulcio certificate cosign checks below. It is the private monorepo and it stays that way.
-#
-# Collapsing these into one constant is the single way this file breaks silently: point the identity
-# regexp at the public repo and every signature check fails closed, so a correct, genuinely signed
-# release refuses to install and the message blames the signature rather than the constant.
-REPO="storagetax/zoorikctl"
-BUILD_REPO="storagetax/storagetax-k8s-optimizer"
+REPO="Zoorikcloud/zoorikctl"
+BUILD_REPO="Zoorikcloud/k8spilot"
 BINARY="zoorikctl"
 CHECKSUM_FILE="checksums.txt"
 
-say() { printf '%s\n' "$*"; }
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ]; then
+    RED=$(printf '\033[31m')
+    RESET=$(printf '\033[0m')
+else
+    RED=''
+    RESET=''
+fi
+
+say() { printf '%s\n' "[$BINARY] $*"; }
 fail() {
-    printf '\n  %s\n' "$1" >&2
-    if [ $# -gt 1 ]; then printf '\n  What to do: %s\n\n' "$2" >&2; else printf '\n' >&2; fi
+    printf '%s\n' "${RED}[$BINARY] Error: $1${RESET}" >&2
+    if [ $# -gt 1 ]; then printf '%s\n' "[$BINARY] $2" >&2; fi
     exit 1
 }
 
@@ -52,11 +28,6 @@ need() {
         "Install $1, or download the binary yourself from https://github.com/$REPO/releases."
 }
 
-# ---------------------------------------------------------------------------------------------
-# Platform. The mapping is explicit and closed: an unrecognised machine is refused rather than
-# turned into a URL, because a guessed asset name is a 404 halfway through an install rather than
-# a sentence at the top of one.
-# ---------------------------------------------------------------------------------------------
 detect_os() {
     case "$(uname -s)" in
         Darwin) echo darwin ;;
@@ -80,7 +51,6 @@ resolve_version() {
         echo "$ZOORIKCTL_VERSION"
         return
     fi
-    # The redirect the /releases/latest URL performs IS the answer, so no JSON parsing and no jq.
     resolved=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
         "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
     resolved=${resolved##*/tag/}
@@ -91,21 +61,6 @@ resolve_version() {
     esac
 }
 
-# ---------------------------------------------------------------------------------------------
-# 🔴 THE CHECKSUM CHECK IS THE POINT OF THIS FILE.
-#
-# Everything else here is convenience. An installer that pipes an unverified download into a
-# directory on PATH is a supply-chain hole shipped to every customer, and it is the one defect in
-# this lane that cannot be fixed after the fact -- a compromised mirror, a hijacked CDN edge or a
-# corporate proxy that rewrites bodies all present as a normal, successful install.
-#
-# The expected digest is read from the release's own checksums.txt, which is signed. That file is
-# fetched over the same connection as the archive, so this check does NOT defend against a control
-# of the whole channel -- what it defends against is the far likelier case of one artifact being
-# swapped, a truncated download, and a mirror serving a stale build. `cosign verify-blob` on
-# checksums.txt.sig is what closes the rest, and it is offered rather than required because
-# requiring a second tool would break the one-line install this file exists to be.
-# ---------------------------------------------------------------------------------------------
 sha256_of() {
     if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "$1" | cut -d' ' -f1
@@ -130,17 +85,14 @@ verify_checksum() {
 
     actual=$(sha256_of "$archive")
     if [ "$expected" != "$actual" ]; then
-        printf '\n  The downloaded file is not the file this release published.\n' >&2
-        printf '    expected  %s\n' "$expected" >&2
-        printf '    actually  %s\n' "$actual" >&2
-        printf '\n  What to do: nothing has been installed and the download has been deleted.\n' >&2
-        printf '  Retry once -- a truncated download looks exactly like this. If it repeats,\n' >&2
-        printf '  something between you and GitHub is altering the file, and you should not\n' >&2
-        printf '  install it.\n\n' >&2
         rm -f "$archive"
+        printf '%s\n' "${RED}[$BINARY] Error: Checksum mismatch. The downloaded file is not the file this release published.${RESET}" >&2
+        printf '%s\n' "[$BINARY]   expected  $expected" >&2
+        printf '%s\n' "[$BINARY]   actually  $actual" >&2
+        printf '%s\n' "[$BINARY] Nothing has been installed and the download has been deleted. Retry once: a truncated download looks exactly like this. If it repeats, something between you and GitHub is altering the file, and you should not install it." >&2
         exit 1
     fi
-    say "  checksum  ok ($actual)"
+    say "Checksum verified."
 }
 
 verify_signature() {
@@ -149,20 +101,20 @@ verify_signature() {
     certificate="$3"
 
     if ! command -v cosign >/dev/null 2>&1; then
-        say "  signature not checked (cosign is not installed)"
         return 0
     fi
     if [ ! -s "$signature" ] || [ ! -s "$certificate" ]; then
-        say "  signature not checked (this release published none)"
+        say "Signature not checked (this release published none)."
         return 0
     fi
+    say "Verifying signature..."
     if cosign verify-blob \
         --certificate "$certificate" \
         --signature "$signature" \
         --certificate-identity-regexp "^https://github.com/$BUILD_REPO/" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "$sums" >/dev/null 2>&1; then
-        say "  signature ok (keyless, built by $BUILD_REPO)"
+        say "Signature verified (keyless, built by $BUILD_REPO)."
     else
         fail "The release's checksum file is not signed by this repository's build." \
              "Nothing has been installed. Do not install this download."
@@ -180,8 +132,6 @@ install_dir() {
             return
         fi
     done
-    # ~/.local/bin is created rather than falling back to sudo. An installer that escalates on its
-    # own is an installer nobody can audit from the one line they pasted.
     mkdir -p "$HOME/.local/bin"
     echo "$HOME/.local/bin"
 }
@@ -192,18 +142,16 @@ main() {
 
     os=$(detect_os)
     arch=$(detect_arch)
+    if [ -z "${ZOORIKCTL_VERSION:-}" ]; then say "Resolving latest version..."; fi
     version=$(resolve_version)
+    say "Version: $version"
     asset="${BINARY}_${version}_${os}_${arch}.tar.gz"
     base="${ZOORIKCTL_BASE_URL:-https://github.com/$REPO/releases/download/$version}"
 
-    say ""
-    say "Installing zoorikctl $version ($os/$arch)"
-
     work=$(mktemp -d)
-    # The trap fires on success, on failure and on Ctrl-C. A downloaded archive left in /tmp after
-    # a failed verification is the file somebody installs by hand ten minutes later.
     trap 'rm -rf "$work"' EXIT INT TERM
 
+    say "Downloading $base/$asset..."
     curl -fsSL "$base/$asset" -o "$work/$asset" || fail \
         "Could not download $asset." \
         "Check that $version is a released version at https://github.com/$REPO/releases."
@@ -213,9 +161,11 @@ main() {
     curl -fsSL "$base/$CHECKSUM_FILE.sig" -o "$work/$CHECKSUM_FILE.sig" 2>/dev/null || true
     curl -fsSL "$base/$CHECKSUM_FILE.pem" -o "$work/$CHECKSUM_FILE.pem" 2>/dev/null || true
 
+    say "Verifying checksum..."
     verify_checksum "$work/$asset" "$asset" "$work/$CHECKSUM_FILE"
     verify_signature "$work/$CHECKSUM_FILE" "$work/$CHECKSUM_FILE.sig" "$work/$CHECKSUM_FILE.pem"
 
+    say "Extracting..."
     tar -xzf "$work/$asset" -C "$work" || fail \
         "The downloaded archive could not be extracted." \
         "Nothing has been installed."
@@ -229,16 +179,17 @@ main() {
         "Could not write $target/$BINARY." \
         "Set ZOORIKCTL_INSTALL_DIR to a directory you can write to, and add it to your PATH."
 
-    say "  installed $target/$BINARY"
+    say "$BINARY $version installed to $target/$BINARY"
     case ":$PATH:" in
-        *":$target:"*) ;;
-        *) say ""
-           say "  $target is not on your PATH. Add it:"
-           say "    export PATH=\"$target:\$PATH\"" ;;
+        *":$target:"*)
+            say "Run '$BINARY --help' to get started, or paste the connect command from the Zoorik console."
+            ;;
+        *)
+            say "$target is not on your PATH. Add it:"
+            printf '\n    export PATH="%s:$PATH"\n\n' "$target"
+            say "Then run '$BINARY --help', or paste the connect command from the Zoorik console."
+            ;;
     esac
-    say ""
-    say "  Next: paste the connect command from the Zoorik console."
-    say ""
 }
 
 main "$@"
