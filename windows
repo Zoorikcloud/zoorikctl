@@ -4,7 +4,7 @@
     Set-StrictMode -Version Latest
 
     $Repo = 'Zoorikcloud/zoorikctl'
-    $BuildRepo = 'Zoorikcloud/k8spilot'
+    $BuildRepo = 'Zoorikcloud/(k8spilot|coral)'
     $Binary = 'zoorikctl.exe'
     $ChecksumFile = 'checksums.txt'
     $StopMarker = 'zoorikctl-install-stopped'
@@ -92,7 +92,7 @@
             Fail "The release's checksum file is not signed by this repository's build." `
                  "Nothing has been installed. Do not install this download."
         }
-        Say "Signature verified (keyless, built by $BuildRepo)."
+        Say "Signature verified (keyless, built by Zoorik's release workflow)."
     }
 
     function Install-Zoorikctl {

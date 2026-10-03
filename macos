@@ -3,7 +3,7 @@
 set -eu
 
 REPO="Zoorikcloud/zoorikctl"
-BUILD_REPO="Zoorikcloud/k8spilot"
+BUILD_REPO="Zoorikcloud/(k8spilot|coral)"
 BINARY="zoorikctl"
 CHECKSUM_FILE="checksums.txt"
 
@@ -114,7 +114,7 @@ verify_signature() {
         --certificate-identity-regexp "^https://github.com/$BUILD_REPO/" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "$sums" >/dev/null 2>&1; then
-        say "Signature verified (keyless, built by $BUILD_REPO)."
+        say "Signature verified (keyless, built by Zoorik's release workflow)."
     else
         fail "The release's checksum file is not signed by this repository's build." \
              "Nothing has been installed. Do not install this download."
