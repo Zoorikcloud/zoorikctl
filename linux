@@ -33,7 +33,7 @@ detect_os() {
         Darwin) echo darwin ;;
         Linux)  echo linux ;;
         *) fail "zoorikctl does not ship a build for $(uname -s)." \
-                "On Windows, run the PowerShell installer instead: irm https://get.zoorik.com/windows | iex" ;;
+                "On Windows, run the PowerShell installer instead: irm https://get.zoorik.com/windows.ps1 | iex" ;;
     esac
 }
 
@@ -104,8 +104,8 @@ verify_signature() {
         return 0
     fi
     if [ ! -s "$signature" ] || [ ! -s "$certificate" ]; then
-        say "Signature not checked (this release published none)."
-        return 0
+        fail "The release's $CHECKSUM_FILE.sig or $CHECKSUM_FILE.pem is empty." \
+             "Nothing has been installed. Do not install this download."
     fi
     say "Verifying signature..."
     if cosign verify-blob \
@@ -146,7 +146,7 @@ main() {
     version=$(resolve_version)
     say "Version: $version"
     asset="${BINARY}_${version}_${os}_${arch}.tar.gz"
-    base="${ZOORIKCTL_BASE_URL:-https://github.com/$REPO/releases/download/$version}"
+    base="https://github.com/$REPO/releases/download/$version"
 
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT INT TERM
@@ -158,8 +158,12 @@ main() {
     curl -fsSL "$base/$CHECKSUM_FILE" -o "$work/$CHECKSUM_FILE" || fail \
         "Could not download the release's $CHECKSUM_FILE." \
         "Nothing has been installed. This installer will not install an unverified binary."
-    curl -fsSL "$base/$CHECKSUM_FILE.sig" -o "$work/$CHECKSUM_FILE.sig" 2>/dev/null || true
-    curl -fsSL "$base/$CHECKSUM_FILE.pem" -o "$work/$CHECKSUM_FILE.pem" 2>/dev/null || true
+    curl -fsSL "$base/$CHECKSUM_FILE.sig" -o "$work/$CHECKSUM_FILE.sig" || fail \
+        "Could not download the release's $CHECKSUM_FILE.sig." \
+        "Nothing has been installed. This installer will not install an unsigned binary."
+    curl -fsSL "$base/$CHECKSUM_FILE.pem" -o "$work/$CHECKSUM_FILE.pem" || fail \
+        "Could not download the release's $CHECKSUM_FILE.pem." \
+        "Nothing has been installed. This installer will not install an unsigned binary."
 
     say "Verifying checksum..."
     verify_checksum "$work/$asset" "$asset" "$work/$CHECKSUM_FILE"

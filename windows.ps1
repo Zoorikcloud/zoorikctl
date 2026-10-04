@@ -80,9 +80,9 @@
         if (-not (Get-Command cosign -ErrorAction SilentlyContinue)) {
             return
         }
-        if (-not (Test-Path $Signature) -or -not (Test-Path $Certificate)) {
-            Say 'Signature not checked (this release published none).'
-            return
+        if ((Get-Item -LiteralPath $Signature).Length -eq 0 -or (Get-Item -LiteralPath $Certificate).Length -eq 0) {
+            Fail "The release's $ChecksumFile.sig or $ChecksumFile.pem is empty." `
+                 "Nothing has been installed. Do not install this download."
         }
         Say 'Verifying signature...'
         & cosign verify-blob --certificate $Certificate --signature $Signature `
@@ -101,11 +101,7 @@
         $version = Get-LatestVersion
         Say "Version: $version"
         $asset = "zoorikctl_${version}_windows_${arch}.zip"
-        $base = if ($env:ZOORIKCTL_BASE_URL) {
-            $env:ZOORIKCTL_BASE_URL
-        } else {
-            "https://github.com/$Repo/releases/download/$version"
-        }
+        $base = "https://github.com/$Repo/releases/download/$version"
 
         $work = Join-Path ([System.IO.Path]::GetTempPath()) ("zoorikctl-" + [guid]::NewGuid())
         New-Item -ItemType Directory -Path $work -Force | Out-Null
@@ -118,10 +114,7 @@
             Invoke-WebRequest -Uri "$base/$asset" -OutFile $archive -UseBasicParsing
             Invoke-WebRequest -Uri "$base/$ChecksumFile" -OutFile $sums -UseBasicParsing
             foreach ($extra in @("$ChecksumFile.sig", "$ChecksumFile.pem")) {
-                try {
-                    Invoke-WebRequest -Uri "$base/$extra" -OutFile (Join-Path $work $extra) `
-                        -UseBasicParsing -ErrorAction SilentlyContinue
-                } catch { }
+                Invoke-WebRequest -Uri "$base/$extra" -OutFile (Join-Path $work $extra) -UseBasicParsing
             }
 
             Say 'Verifying checksum...'
