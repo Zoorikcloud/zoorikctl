@@ -24,9 +24,10 @@
     }
 
     function Get-Architecture {
-        switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-            'X64'   { return 'amd64' }
-            'Arm64' { return 'arm64' }
+        $machine = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+        switch ($machine) {
+            'AMD64' { return 'amd64' }
+            'ARM64' { return 'arm64' }
             default {
                 Fail "zoorikctl does not ship a Windows build for $_." `
                      "Open an issue at https://github.com/$Repo/issues naming this architecture."
@@ -85,6 +86,7 @@
                  "Nothing has been installed. Do not install this download."
         }
         Say 'Verifying signature...'
+        $ErrorActionPreference = 'Continue'
         & cosign verify-blob --certificate $Certificate --signature $Signature `
             --certificate-identity-regexp "^https://github.com/$BuildRepo/" `
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' $Sums 2>$null
