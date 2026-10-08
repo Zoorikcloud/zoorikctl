@@ -4,7 +4,7 @@
     Set-StrictMode -Version Latest
 
     $Repo = 'getzoorik/zoorikctl'
-    $BuildRepo = 'Zoorikcloud/(k8spilot|coral)'
+    $BuildIdentity = '^https://github.com/getzoorik/coral/\.github/workflows/zoorikctl-release\.yaml@refs/heads/main$'
     $Binary = 'zoorikctl.exe'
     $ChecksumFile = 'checksums.txt'
     $StopMarker = 'zoorikctl-install-stopped'
@@ -88,10 +88,10 @@
         Say 'Verifying signature...'
         $ErrorActionPreference = 'Continue'
         & cosign verify-blob --certificate $Certificate --signature $Signature `
-            --certificate-identity-regexp "^https://github.com/$BuildRepo/" `
+            --certificate-identity-regexp $BuildIdentity `
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' $Sums 2>$null
         if ($LASTEXITCODE -ne 0) {
-            Fail "The release's checksum file is not signed by this repository's build." `
+            Fail "The release's checksum file is not signed by Zoorik's release workflow." `
                  "Nothing has been installed. Do not install this download."
         }
         Say "Signature verified (keyless, built by Zoorik's release workflow)."
