@@ -2,7 +2,7 @@
 
 set -eu
 
-REPO="Zoorikcloud/zoorikctl"
+REPO="getzoorik/zoorikctl"
 BUILD_REPO="Zoorikcloud/(k8spilot|coral)"
 BINARY="zoorikctl"
 CHECKSUM_FILE="checksums.txt"
