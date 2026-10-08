@@ -3,7 +3,7 @@
     $ProgressPreference = 'SilentlyContinue'
     Set-StrictMode -Version Latest
 
-    $Repo = 'Zoorikcloud/zoorikctl'
+    $Repo = 'getzoorik/zoorikctl'
     $BuildRepo = 'Zoorikcloud/(k8spilot|coral)'
     $Binary = 'zoorikctl.exe'
     $ChecksumFile = 'checksums.txt'
